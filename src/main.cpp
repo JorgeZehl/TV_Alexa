@@ -18,15 +18,59 @@ fauxmoESP fauxmo;
 #define SERIAL_BAUDRATE     115200
 
 
-#define ID_YELLOW           "La Tele"
-#define ID_GREEN            "Volumen de la tele"
-#define ID_BLUE             "ArduinoHDMI"
+#define ID_ON_OFF_TV           "La Tele"
+#define ID_VOLUM            "Volumen de la tele"
+#define ID_HDMI             "ArduinoHDMI"
 
 // -----------------------------------------------------------------------------
 
 // -----------------------------------------------------------------------------
 // Wifi
 // -----------------------------------------------------------------------------
+
+
+// IRMP Library
+/*
+ * Set library modifiers first to set output pin etc.
+ */
+#include "PinDefinitionsAndMore.h"
+//#define IR_OUTPUT_IS_ACTIVE_LOW
+#define IRSND_IR_FREQUENCY          38000
+
+#define IRSND_PROTOCOL_NAMES        1 // Enable protocol number mapping to protocol strings - requires some FLASH.
+
+#include <irsndSelectMain15Protocols.h>
+// or use only one protocol to save programming space
+//#define IRSND_SUPPORT_NEC_PROTOCOL        1
+
+/*
+ * After setting the definitions we can include the code and compile it.
+ */
+#include <irsnd.hpp>
+
+
+union WordUnion
+{
+    struct
+    {
+        uint8_t LowByte;
+        uint8_t HighByte;
+    } UByte;
+    struct
+    {
+        int8_t LowByte;
+        int8_t HighByte;
+    } Byte;
+    uint8_t UBytes[2];
+    int8_t Bytes[2];
+    uint16_t UWord;
+    int16_t Word;
+    uint8_t *BytePointer;
+};
+
+IRMP_DATA irsnd_data;
+
+
 
 void wifiSetup() {
 
@@ -53,20 +97,33 @@ void setup() {
 
     // Init serial port and clean garbage
     Serial.begin(SERIAL_BAUDRATE);
-    Serial.println();
-    Serial.println();
 
-    // LEDs
-    pinMode(LED_YELLOW, OUTPUT);
-    pinMode(LED_GREEN, OUTPUT);
-    pinMode(LED_BLUE, OUTPUT);
-    pinMode(LED_PINK, OUTPUT);
-    pinMode(LED_WHITE, OUTPUT);
-    digitalWrite(LED_YELLOW, LOW);
-    digitalWrite(LED_GREEN, LOW);
-    digitalWrite(LED_BLUE, LOW);
-    digitalWrite(LED_PINK, LOW);
-    digitalWrite(LED_WHITE, LOW);
+#if defined(__AVR_ATmega32U4__) || defined(SERIAL_PORT_USBVIRTUAL) || defined(SERIAL_USB) || defined(SERIALUSB_PID) || defined(ARDUINO_attiny3217)
+    delay(4000); // To be able to connect Serial monitor after reset or power up and before first print out. Do not wait for an attached Serial Monitor!
+#endif
+#if defined(ESP8266)
+    Serial.println(); // to separate it from the internal boot output
+#endif
+
+    // Just to know which program is running on my Arduino
+    Serial.println(F("START " __FILE__ " from " __DATE__ "\r\nUsing library version " VERSION_IRMP));
+
+    irsnd_init();
+    irmp_irsnd_LEDFeedback(true); // Enable send signal feedback at LED_BUILTIN
+
+#if defined(ARDUINO_ARCH_STM32)
+    Serial.println(F("Ready to send IR signals at pin " IRSND_OUTPUT_PIN_STRING)); // the internal pin numbers are crazy for the STM32 Boards library
+#else
+    Serial.println(F("Ready to send IR signals at pin " STR(IRSND_OUTPUT_PIN)));
+#endif
+    /*
+     * Send Samsung32
+     */
+    irsnd_data.protocol = IRMP_SAMSUNG32_PROTOCOL;
+    irsnd_data.address = 0x0707;
+    irsnd_data.flags = 0; // repeat frame 0 time
+    Serial.println();
+    Serial.println();
 
     // Wifi
     wifiSetup();
@@ -88,9 +145,9 @@ void setup() {
     // "Alexa, set yellow lamp to fifty" (50 means 50% of brightness, note, this example does not use this functionality)
 
     // Add virtual devices
-    fauxmo.addDevice(ID_YELLOW);
-    fauxmo.addDevice(ID_GREEN);
-    fauxmo.addDevice(ID_BLUE);
+    fauxmo.addDevice(ID_ON_OFF_TV);
+    fauxmo.addDevice(ID_VOLUM);
+    fauxmo.addDevice(ID_HDMI);
 
 
     fauxmo.onSetState([](unsigned char device_id, const char * device_name, bool state, unsigned char value) {
@@ -106,11 +163,19 @@ void setup() {
         // Checking for device_id is simpler if you are certain about the order they are loaded and it does not change.
         // Otherwise comparing the device_name is safer.
 
-        if (strcmp(device_name, ID_YELLOW)==0) {
+        if (strcmp(device_name, ID_ON_OFF_TV)==0) {
+            if(state == HIGH)
+            {
+
+            }
+            else(state == LOW)
+            {
+
+            }
             digitalWrite(LED_YELLOW, state ? HIGH : LOW);
-        } else if (strcmp(device_name, ID_GREEN)==0) {
+        } else if (strcmp(device_name, ID_VOLUM)==0) {
             digitalWrite(LED_GREEN, state ? HIGH : LOW);
-        } else if (strcmp(device_name, ID_BLUE)==0) {
+        } else if (strcmp(device_name, ID_HDMI)==0) {
             digitalWrite(LED_BLUE, state ? HIGH : LOW);
         } 
 
